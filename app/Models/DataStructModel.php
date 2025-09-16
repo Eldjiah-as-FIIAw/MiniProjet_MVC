@@ -36,6 +36,9 @@
     
     class Place extends Model 
     {
-        
+        protected $table="place";
+        protected $primarykey="id_place";
+        protected $allowdFields=['numero_place', 'etat','id_parking', 'statut'];
+      
     }
     
