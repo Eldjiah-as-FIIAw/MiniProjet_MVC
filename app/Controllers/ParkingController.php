@@ -1,24 +1,30 @@
 <?php
 namespace App\Controllers;
 
-use App\Models\Parking;
-use App\Models\Place;
+use App\Models\ParkingModel;
+use App\Models\PlaceModel;
 
 class ParkingController extends BaseController
 {
-    public function index()
+    protected $parkingModel;
+    protected $placeModel;
+
+    public function __construct()
     {
-        $model = new Parking();
-        $data['parkings'] = $model->getParkingsDisponibles();
-        return view('parkings/liste', $data);
+        $this->parkingModel = new ParkingModel();
+        $this->placeModel = new PlaceModel();
     }
 
-    public function voirPlaces($id_parking)
+    public function index()
     {
-        $placeModel = new Place();
-        $data['places'] = $placeModel->getPlacesLibres($id_parking);
-        $data['parking'] = (new Parking())->find($id_parking);
-        return view('parkings/places', $data);
+        $data['parkings'] = $this->parkingModel->getAvailableParkings();
+        return view('parking/list', $data);
     }
-    
+
+    public function viewPlaces($id_parking)
+    {
+        $data['places'] = $this->placeModel->getAvailablePlaces($id_parking);
+        $data['parking'] = $this->parkingModel->find($id_parking);
+        return view('parking/places', $data);
+    }
 }

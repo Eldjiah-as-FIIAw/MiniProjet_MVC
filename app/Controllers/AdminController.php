@@ -1,56 +1,116 @@
 <?php
 namespace App\Controllers;
 
-use App\Models\Client;
-use App\Models\Reservation;
-use App\Models\Parking;
-use App\Models\Admin;
+use App\Models\AdminModel;
+use App\Models\ReservationModel;
+use App\Models\ParkingModel;
+use App\Models\LavageModel;
 
 class AdminController extends BaseController
 {
-    public function connexion()
+    protected $adminModel;
+    protected $reservationModel;
+    protected $parkingModel;
+    protected $lavageModel;
+
+    public function __construct()
     {
-        if ($this->request->getMethod() === 'post') {
-            $model = new Admin();
+        $this->adminModel = new AdminModel();
+        $this->reservationModel = new ReservationModel();
+        $this->parkingModel = new ParkingModel();
+        $this->lavageModel = new LavageModel();
+    }
+
+    public function login()
+    {
+        if ($this->request->getMethod(true) === 'POST') {
             $email = $this->request->getPost('email');
             $mdp = $this->request->getPost('mdp');
-            $admin = $model->verifierAdmin($email, $mdp);
-            if ($admin) {
-                session()->set('admin', $admin);
+
+            // Debugging: log login attempt
+            log_message('debug', 'Admin login attempt for email: ' . $email);
+
+            $admin = $this->adminModel->where('email', $email)->first();
+            if ($admin && password_verify($mdp, $admin['mdp'])) {
+                session()->set('admin_id', $admin['id_admin']);
+                log_message('debug', 'Admin login successful for email: ' . $email);
                 return redirect()->to('/admin/dashboard');
             }
-            return view('admin/connexion', ['error' => 'Email ou mot de passe incorrect']);
+            log_message('error', 'Admin login failed for email: ' . $email);
+            return view('admin/login', ['error' => 'Email ou mot de passe incorrect']);
         }
-        return view('admin/connexion');
+        return view('admin/login');
     }
 
     public function dashboard()
     {
-        if (!session()->has('admin')) {
-            return redirect()->to('/admin/connexion');
+        if (!session()->has('admin_id')) {
+            return redirect()->to('/admin/login');
         }
 
-        $reservationModel = new Reservation();
-        $parkingModel = new Parking();
-
-        // Récupérer les meilleurs clients
-        $meilleurs_clients = $reservationModel->select('client.nom, client.prenom, client.email, COUNT(reservation.id_reservation) as nb_reservations')
-            ->join('client', 'client.id_client = reservation.id_client')
-            ->groupBy('client.id_client')
+        $meilleurs_clients = $this->reservationModel
+            ->select('Client.nom, Client.prenom, Client.email, COUNT(Reservation.id_reservation) as nb_reservations')
+            ->join('Client', 'Client.id_client = Reservation.id_client')
+            ->groupBy('Client.id_client')
             ->orderBy('nb_reservations', 'DESC')
             ->findAll(5);
 
-        // Générer des suggestions
+        $stats_parkings = $this->reservationModel
+            ->select('Parking.nom_parking, COUNT(Reservation.id_reservation) as total_reservations')
+            ->join('Place', 'Place.id_place = Reservation.id_place')
+            ->join('Parking', 'Parking.id_parking = Place.id_parking')
+            ->groupBy('Parking.id_parking')
+            ->orderBy('total_reservations', 'DESC')
+            ->findAll();
+
         $suggestions = [];
-        $parkings_peu_utilises = $parkingModel->where('nb_place >', 10)->findAll();
+        $parkings_peu_utilises = $this->parkingModel->getAvailableParkings();
         if (!empty($parkings_peu_utilises)) {
             $suggestions[] = "Promouvoir les parkings suivants avec beaucoup de places disponibles : " . implode(', ', array_column($parkings_peu_utilises, 'nom_parking'));
         }
-        $suggestions[] = "Envoyer une offre promotionnelle aux clients ayant effectué plus de 3 réservations.";
+        if (!empty($meilleurs_clients)) {
+            $suggestions[] = "Envoyer une offre promotionnelle aux clients suivants : " . implode(', ', array_column($meilleurs_clients, 'email'));
+        }
+
+        $lavages_stats = $this->lavageModel
+            ->select('type_lavage, COUNT(*) as total')
+            ->groupBy('type_lavage')
+            ->findAll();
 
         return view('admin/dashboard', [
             'meilleurs_clients' => $meilleurs_clients,
-            'suggestions' => $suggestions
+            'stats_parkings' => $stats_parkings,
+            'suggestions' => $suggestions,
+            'lavages_stats' => $lavages_stats
         ]);
+    }
+
+    public function manageReservations()
+    {
+        if (!session()->has('admin_id')) {
+            return redirect()->to('/admin/login');
+        }
+
+        $reservations = $this->reservationModel
+            ->select('Reservation.*, Client.nom as client_nom, Place.numero_place, Parking.nom_parking')
+            ->join('Client', 'Client.id_client = Reservation.id_client')
+            ->join('Place', 'Place.id_place = Reservation.id_place')
+            ->join('Parking', 'Parking.id_parking = Place.id_parking')
+            ->findAll();
+
+        return view('admin/reservations', ['reservations' => $reservations]);
+    }
+
+    public function confirmReservation($id_reservation)
+    {
+        if (!session()->has('admin_id')) {
+            return redirect()->to('/admin/login');
+        }
+
+        $this->reservationModel->update($id_reservation, [
+            'statut' => 'confirmée',
+            'validée_par' => session()->get('admin_id')
+        ]);
+        return redirect()->to('/admin/reservations')->with('success', 'Réservation confirmée.');
     }
 }
