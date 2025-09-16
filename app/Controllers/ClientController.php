@@ -27,7 +27,7 @@ class ClientController extends BaseController
             $data = [
                 'nom' => $this->request->getPost('nom'),
                 'prenom' => $this->request->getPost('prenom'),
-                'email' => $this->request->getPost('email'),
+                'email' => trim(strtolower($this->request->getPost('email'))),
                 'tel' => $this->request->getPost('tel'),
                 'mdp' => $this->request->getPost('mdp')
             ];
@@ -50,20 +50,38 @@ class ClientController extends BaseController
     public function login()
     {
         if ($this->request->getMethod(true) === 'POST') {
-            $email = $this->request->getPost('email');
+            $email = trim(strtolower($this->request->getPost('email')));
             $mdp = $this->request->getPost('mdp');
 
-            // Debugging: log login attempt
+            // Debugging: log raw POST data and login attempt
+            log_message('debug', 'Raw POST data: ' . json_encode($this->request->getPost()));
             log_message('debug', 'Login attempt for email: ' . $email);
+            log_message('debug', 'Submitted password length: ' . strlen($mdp));
 
-            $client = $this->clientModel->where('email', $email)->first();
-            if ($client && password_verify($mdp, $client['mdp'])) {
-                session()->set('client_id', $client['id_client']);
-                log_message('debug', 'Login successful for email: ' . $email);
-                return redirect()->to('/client/dashboard');
+            try {
+                $client = $this->clientModel->where('email', $email)->first();
+                if (!$client) {
+                    log_message('error', 'No user found for email: ' . $email);
+                    return view('client/login', ['error' => 'Aucun utilisateur trouvé avec cet email']);
+                }
+
+                log_message('debug', 'User found: ' . json_encode($client));
+                log_message('debug', 'Stored hashed password: ' . $client['mdp']);
+                log_message('debug', 'Stored hash length: ' . strlen($client['mdp']));
+
+                if (password_verify($mdp, $client['mdp'])) {
+                    session()->set('client_id', $client['id_client']);
+                    log_message('debug', 'Login successful for email: ' . $email);
+                    log_message('debug', 'Session data: ' . json_encode(session()->get()));
+                    return redirect()->to('/client/dashboard');
+                }
+
+                log_message('error', 'Password verification failed for email: ' . $email);
+                return view('client/login', ['error' => 'Mot de passe incorrect']);
+            } catch (\Exception $e) {
+                log_message('error', 'Database error during login: ' . $e->getMessage());
+                return view('client/login', ['error' => 'Erreur de base de données : ' . $e->getMessage()]);
             }
-            log_message('error', 'Login failed for email: ' . $email);
-            return view('client/login', ['error' => 'Email ou mot de passe incorrect']);
         }
         return view('client/login');
     }
@@ -71,6 +89,7 @@ class ClientController extends BaseController
     public function dashboard()
     {
         if (!session()->has('client_id')) {
+            log_message('error', 'No client_id in session, redirecting to login');
             return redirect()->to('/client/login');
         }
 
