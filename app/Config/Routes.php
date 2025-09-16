@@ -2,18 +2,28 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
+
+// Route par défaut pour l'URL racine
 $routes->get('/', 'HomeController::index');
-$routes->get('admin/connexion', 'AdminController::connexion');
-$routes->post('admin/connexion', 'AdminController::connexion');
+
+// Routes existantes
+$routes->get('client/register', 'ClientController::register');
+$routes->post('client/register', 'ClientController::register');
+$routes->get('client/login', 'ClientController::login');
+$routes->post('client/login', 'ClientController::login');
+$routes->get('client/dashboard', 'ClientController::dashboard');
+$routes->get('client/lavage', 'ClientController::requestLavage');
+$routes->post('client/lavage', 'ClientController::requestLavage');
+$routes->get('admin/login', 'AdminController::login');
+$routes->post('admin/login', 'AdminController::login');
 $routes->get('admin/dashboard', 'AdminController::dashboard');
-$routes->get('clients/inscription', 'ClientController::inscription');
-$routes->post('clients/inscription', 'ClientController::inscription');
-$routes->get('clients/connexion', 'ClientController::connexion');
-$routes->post('clients/connexion', 'ClientController::connexion');
-$routes->get('clients/tableau_de_bord', 'ClientController::tableauDeBord');
-$routes->get('parkings', 'ParkingController::index');
-$routes->get('parkings/(:num)/places', 'ParkingController::voirPlaces/$1');
-$routes->get('reservations/ajouter/(:num)', 'ReservationController::ajouter/$1');
-$routes->post('reservations/ajouter/(:num)', 'ReservationController::ajouter/$1');
-$routes->get('reservations/verifier/(:num)', 'ReservationController::verifierDisponibilite/$1');
-$routes->get('logout', 'AuthController::logout');
+$routes->get('admin/reservations', 'AdminController::manageReservations');
+$routes->get('admin/reservations/confirm/(:num)', 'AdminController::confirmReservation/$1');
+$routes->get('parking', 'ParkingController::index');
+$routes->get('parking/places/(:num)', 'ParkingController::viewPlaces/$1');
+$routes->get('reservation/add/(:num)', 'ReservationController::add/$1');
+$routes->post('reservation/add/(:num)', 'ReservationController::add/$1');
+$routes->get('logout', function() {
+    session()->destroy();
+    return redirect()->to('/client/login');
+});
